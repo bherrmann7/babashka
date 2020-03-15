@@ -177,7 +177,11 @@
                         ;; not supported: {:name "setURLStreamHandlerFactory"}
                         {:name "toExternalForm"}
                         {:name "toString"}
-                        {:name "toURI"}]}}})
+                        {:name "toURI"}]}
+             "[Ljava.nio.file.StandardWatchEventKinds$StdWatchEventKind;"
+             {:allPublicConstructors true
+              :allPublicFields true
+              :allPublicMethods true}}})
 
 (defmacro gen-class-map []
   (let [classes (concat (:all classes)
