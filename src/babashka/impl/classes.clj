@@ -64,6 +64,7 @@
           java.nio.file.StandardWatchEventKinds
           java.nio.file.StandardWatchEventKinds$StdWatchEventKind
           java.nio.file.WatchKey
+          java.nio.file.WatchEvent
           java.nio.file.WatchService
           java.nio.file.attribute.FileAttribute
           java.nio.file.attribute.FileTime
@@ -208,7 +209,9 @@
                    (instance? java.nio.file.FileSystem v)
                    java.nio.file.FileSystem
                    (instance? java.nio.file.WatchKey v)
-                   java.nio.file.WatchKey)))))
+                   java.nio.file.WatchKey
+                   (instance? java.nio.file.WatchEvent v)
+                   java.nio.file.WatchEvent)))))
 
 (def class-map (gen-class-map))
 
