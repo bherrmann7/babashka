@@ -54,11 +54,16 @@
           java.nio.file.CopyOption
           java.nio.file.FileAlreadyExistsException
           java.nio.file.Files
+          java.nio.file.FileSystem
+          java.nio.file.FileSystems
           java.nio.file.LinkOption
           java.nio.file.NoSuchFileException
           java.nio.file.Path
           java.nio.file.Paths
           java.nio.file.StandardCopyOption
+          java.nio.file.StandardWatchEventKinds
+          java.nio.file.WatchKey
+          java.nio.file.WatchService
           java.nio.file.attribute.FileAttribute
           java.nio.file.attribute.FileTime
           java.nio.file.attribute.PosixFilePermission
@@ -194,7 +199,11 @@
                    (instance? java.io.ByteArrayOutputStream v)
                    java.io.ByteArrayOutputStream
                    (instance? java.security.MessageDigest v)
-                   java.security.MessageDigest)))))
+                   java.security.MessageDigest
+                   (instance? java.nio.file.FileSystem v)
+                   java.nio.file.FileSystem
+                   (instance? java.nio.file.WatchKey v)
+                   java.nio.file.WatchKey)))))
 
 (def class-map (gen-class-map))
 
