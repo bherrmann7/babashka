@@ -62,6 +62,7 @@
           java.nio.file.Paths
           java.nio.file.StandardCopyOption
           java.nio.file.StandardWatchEventKinds
+          java.nio.file.StandardWatchEventKinds$StdWatchEventKind
           java.nio.file.WatchKey
           java.nio.file.WatchService
           java.nio.file.attribute.FileAttribute
