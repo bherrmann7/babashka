@@ -9,24 +9,28 @@
    [babashka.impl.clojure.java.io :refer [io-namespace]]
    [babashka.impl.clojure.java.shell :refer [shell-namespace]]
    [babashka.impl.clojure.main :refer [demunge]]
-   [babashka.impl.clojure.stacktrace :refer [stacktrace-namespace print-stack-trace]]
+   [babashka.impl.clojure.pprint :refer [pprint-namespace]]
+   [babashka.impl.clojure.stacktrace :refer [stacktrace-namespace]]
    [babashka.impl.common :as common]
    [babashka.impl.csv :as csv]
+   [babashka.impl.curl :refer [curl-namespace]]
    [babashka.impl.pipe-signal-handler :refer [handle-pipe! pipe-signal-received?]]
    [babashka.impl.repl :as repl]
    [babashka.impl.socket-repl :as socket-repl]
    [babashka.impl.test :as t]
    [babashka.impl.tools.cli :refer [tools-cli-namespace]]
+   [babashka.impl.transit :refer [transit-namespace]]
    [babashka.wait :as wait]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.stacktrace :refer [print-stack-trace]]
    [clojure.string :as str]
-   [fipp.edn :as fipp]
-   [clj-yaml.core :as yaml]
+   [babashka.impl.yaml :refer [yaml-namespace]]
    [sci.addons :as addons]
    [sci.core :as sci]
    [sci.impl.interpreter :refer [eval-string*]]
    [sci.impl.opts :as sci-opts]
+   [sci.impl.types :as sci-types]
    [sci.impl.unrestrict :refer [*unrestricted*]]
    [sci.impl.vars :as vars])
   (:gen-class))
@@ -110,7 +114,8 @@
                      (let [options (next options)]
                        (recur (next options)
                               (assoc opts-map
-                                     :socket-repl (first options))))
+                                     :socket-repl (or (first options)
+                                                      "1666"))))
                      ("--eval", "-e")
                      (let [options (next options)]
                        (recur (next options)
@@ -198,20 +203,16 @@ Everything after that is bound to *command-line-args*."))
         (str/replace x #"^#!.*" ""))
       (throw (Exception. (str "File does not exist: " file))))))
 
-(defn read-edn []
-  (edn/read {;;:readers *data-readers*
-             :eof ::EOF} *in*))
-
 (def reflection-var (sci/new-dynamic-var '*warn-on-reflection* false))
 
 (defn load-file* [sci-ctx f]
   (let [f (io/file f)
-        s (slurp f)]
+        s (slurp f)
+        prev-ns @vars/current-ns]
     (sci/with-bindings {vars/current-file (.getCanonicalPath f)}
-      (eval-string* sci-ctx s))))
-
-(defn eval* [sci-ctx form]
-  (eval-string* sci-ctx (pr-str form)))
+      (try
+        (eval-string* sci-ctx s)
+        (finally (sci-types/setVal vars/current-ns prev-ns))))))
 
 (defn start-socket-repl! [address ctx]
   (socket-repl/start-repl! address ctx)
@@ -231,7 +232,9 @@ Everything after that is bound to *command-line-args*."))
     async clojure.core.async
     csv clojure.data.csv
     json cheshire.core
-    yaml clj-yaml.core})
+    yaml clj-yaml.core
+    curl babashka.curl
+    transit cognitect.transit})
 
 (def cp-state (atom nil))
 
@@ -261,9 +264,10 @@ Everything after that is bound to *command-line-args*."))
    'clojure.repl {'demunge demunge}
    'clojure.test t/clojure-test-namespace
    'babashka.classpath {'add-classpath add-classpath*}
-   'clojure.pprint {'pprint fipp/pprint}
-   'clj-yaml.core {'generate-string yaml/generate-string
-                   'parse-string yaml/parse-string}})
+   'clj-yaml.core yaml-namespace
+   'clojure.pprint pprint-namespace
+   'babashka.curl curl-namespace
+   'cognitect.transit transit-namespace})
 
 (def bindings
   {'java.lang.System/exit exit ;; override exit, so we have more control
@@ -303,7 +307,8 @@ Everything after that is bound to *command-line-args*."))
                           ::EOF
                           (if stream?
                             (if shell-in (or (read-line) ::EOF)
-                                (read-edn))
+                                (edn/read {;;:readers *data-readers*
+                                           :eof ::EOF} *in*))
                             (delay (cond shell-in
                                          (shell-seq *in*)
                                          edn-in
@@ -346,7 +351,9 @@ Everything after that is bound to *command-line-args*."))
                             File java.io.File
                             Long java.lang.Long
                             Math java.lang.Math
+                            NumberFormatException java.lang.NumberFormatException
                             Object java.lang.Object
+                            RuntimeException java.lang.RuntimeException
                             ProcessBuilder java.lang.ProcessBuilder
                             String java.lang.String
                             StringBuilder java.lang.StringBuilder
@@ -358,17 +365,20 @@ Everything after that is bound to *command-line-args*."))
             ctx (addons/future ctx)
             sci-ctx (sci-opts/init ctx)
             _ (vreset! common/ctx sci-ctx)
+            input-var (sci/new-dynamic-var '*input* nil)
             _ (swap! (:env sci-ctx)
                      (fn [env]
-                       (update-in env [:namespaces 'clojure.core] assoc
-                                  'eval #(eval* sci-ctx %)
-                                  'load-file #(load-file* sci-ctx %))))
-            _ (swap! (:env sci-ctx)
-                     (fn [env]
-                       (assoc-in env [:namespaces 'clojure.main 'repl]
-                                 (fn [& opts]
-                                   (let [opts (apply hash-map opts)]
-                                     (repl/start-repl! sci-ctx opts))))))
+                       (update env :namespaces
+                               (fn [namespaces] [:namespaces 'clojure.main 'repl]
+                                 (-> namespaces
+                                     (assoc-in ['clojure.core 'load-file] #(load-file* sci-ctx %))
+                                     (assoc-in ['clojure.main 'repl]
+                                               (fn [& opts]
+                                                 (let [opts (apply hash-map opts)]
+                                                   (repl/start-repl! sci-ctx opts))))
+                                     (assoc-in ['user (with-meta '*input*
+                                                        (when-not stream?
+                                                          {:sci.impl/deref! true}))] input-var))))))
             preloads (some-> (System/getenv "BABASHKA_PRELOADS") (str/trim))
             [expressions exit-code]
             (cond expressions [expressions nil]
@@ -398,15 +408,13 @@ Everything after that is bound to *command-line-args*."))
                        socket-repl [(start-socket-repl! socket-repl sci-ctx) 0]
                        (not (str/blank? expression))
                        (try
-                         (loop [in (read-next *in*)]
-                           (let [_ (swap! env update-in [:namespaces 'user]
-                                          assoc (with-meta '*input*
-                                                  (when-not stream?
-                                                    {:sci.impl/deref! true}))
-                                          (sci/new-dynamic-var '*input* in))]
+                         (loop []
+                           (let [in (read-next *in*)]
                              (if (identical? ::EOF in)
                                [nil 0] ;; done streaming
-                               (let [res [(let [res (eval-string* sci-ctx expression)]
+                               (let [res [(let [res
+                                                (sci/binding [input-var in]
+                                                  (eval-string* sci-ctx expression))]
                                             (when (some? res)
                                               (if-let [pr-f (cond shell-out println
                                                                   edn-out prn)]
@@ -417,7 +425,7 @@ Everything after that is bound to *command-line-args*."))
                                                   (pr-f res))
                                                 (prn res)))) 0]]
                                  (if stream?
-                                   (recur (read-next *in*))
+                                   (recur)
                                    res)))))
                          (catch Throwable e
                            (error-handler* e verbose?)))

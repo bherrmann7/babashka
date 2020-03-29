@@ -13,7 +13,8 @@
 ;;                     (identical? os :mac)))
 
 (def classes
-  '{:all [java.io.BufferedReader
+  '{:all [clojure.lang.ExceptionInfo
+          java.io.BufferedReader
           java.io.BufferedWriter
           java.io.ByteArrayInputStream
           java.io.ByteArrayOutputStream
@@ -21,6 +22,7 @@
           java.io.InputStream
           java.io.IOException
           java.io.OutputStream
+          java.io.FileReader
           java.io.Reader
           java.io.StringReader
           java.io.StringWriter
@@ -33,7 +35,9 @@
           java.lang.Exception
           java.lang.Integer
           java.lang.Long
+          java.lang.NumberFormatException
           java.lang.Math
+          java.lang.RuntimeException
           java.util.concurrent.LinkedBlockingQueue
           java.lang.Object
           java.lang.String
@@ -53,6 +57,8 @@
           java.net.URLDecoder
           java.nio.file.CopyOption
           java.nio.file.FileAlreadyExistsException
+          java.nio.file.FileSystem
+          java.nio.file.FileSystems
           java.nio.file.Files
           java.nio.file.LinkOption
           java.nio.file.NoSuchFileException
@@ -83,12 +89,15 @@
           java.time.ZonedDateTime
           java.time.ZoneId
           java.time.ZoneOffset
+          java.time.temporal.ChronoUnit
           java.time.temporal.TemporalAccessor
           java.util.regex.Pattern
           java.util.Base64
           java.util.Base64$Decoder
           java.util.Base64$Encoder
           java.util.Date
+          java.util.MissingResourceException
+          java.util.Properties
           java.util.UUID
           java.util.concurrent.TimeUnit
           java.util.zip.InflaterInputStream
@@ -104,8 +113,7 @@
     :methods [borkdude.graal.LockFix ;; support for locking
               ]
     :fields [clojure.lang.PersistentQueue]
-    :instance-checks [clojure.lang.ExceptionInfo
-                      clojure.lang.IObj
+    :instance-checks [clojure.lang.IObj
                       clojure.lang.IEditableCollection]
     :custom {clojure.lang.LineNumberingPushbackReader {:allPublicConstructors true
                                                        :allPublicMethods true}
@@ -193,7 +201,11 @@
                    (instance? java.io.ByteArrayOutputStream v)
                    java.io.ByteArrayOutputStream
                    (instance? java.security.MessageDigest v)
-                   java.security.MessageDigest)))))
+                   java.security.MessageDigest
+                   (instance? java.io.InputStream v)
+                   java.io.InputStream
+                   (instance? java.nio.file.FileSystem v)
+                   java.nio.file.FileSystem)))))
 
 (def class-map (gen-class-map))
 
