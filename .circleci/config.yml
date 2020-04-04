@@ -64,13 +64,14 @@ jobs:
   linux:
     docker:
       - image: circleci/clojure:lein-2.8.1
-    resource_class: large 
+    resource_class: large
     working_directory: ~/repo
     environment:
       LEIN_ROOT: "true"
       GRAALVM_HOME: /home/circleci/graalvm-ce-java8-19.3.1
       BABASHKA_PLATFORM: linux # used in release script
       BABASHKA_TEST_ENV: native
+      BABASHKA_XMX: "-J-Xmx6g"
     steps:
       - checkout
       - run:
