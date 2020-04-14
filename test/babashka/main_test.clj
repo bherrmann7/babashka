@@ -9,6 +9,10 @@
    [clojure.test :as test :refer [deftest is testing]]
    [sci.core :as sci]))
 
+(defmethod clojure.test/report :begin-test-var [m]
+  (println "===" (-> m :var meta :name))
+  (println))
+
 (defn bb [input & args]
   (edn/read-string (apply test-utils/bb (when (some? input) (str input)) (map str args))))
 
@@ -243,6 +247,7 @@
 
 (deftest reader-conditionals-test
   (is (= :hello (bb nil "#?(:bb :hello :default :bye)")))
+  (is (= :hello (bb nil "#? (:bb :hello :default :bye)")))
   (is (= :hello (bb nil "#?(:clj :hello :bb :bye)")))
   (is (= [1 2] (bb nil "[1 2 #?@(:bb [] :clj [1])]"))))
 
@@ -376,10 +381,26 @@
       (is v))))
 
 (deftest download-and-extract-test
-  (is (= 6 (bb nil (io/file "test" "babashka" "scripts" "download_and_extract_zip.bb")))))
+  (is (try (= 6 (bb nil (io/file "test" "babashka" "scripts" "download_and_extract_zip.bb")))
+           (catch Exception e
+             (is (str/includes? (str e) "timed out"))))))
 
 (deftest get-message-on-exception-info-test
   (is "foo" (bb nil "(try (throw (ex-info \"foo\" {})) (catch Exception e (.getMessage e)))")))
+
+(deftest pushback-reader-test
+  (is (= "foo" (bb nil "
+(require '[clojure.java.io :as io])
+(let [pb (java.io.PushbackInputStream. (java.io.ByteArrayInputStream. (.getBytes \"foo\")))]
+  (.unread pb (.read pb))
+  (slurp pb))"))))
+
+(deftest delete-on-exit-test
+  (when test-utils/native?
+    (let [f (java.io.File/createTempFile "foo" "bar")
+          p (.getPath f)]
+      (bb nil (format "(.deleteOnExit (io/file \"%s\"))" p))
+      (is (false? (.exists f))))))
 
 (deftest yaml-test
   (is (str/starts-with?
@@ -389,5 +410,4 @@
 ;;;; Scratch
 
 (comment
-  (dotimes [_ 10] (wait-for-port-test))
-  )
+  (dotimes [_ 10] (wait-for-port-test)))

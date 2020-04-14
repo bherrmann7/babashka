@@ -36,8 +36,6 @@ As one user described it:
 * Batteries included (tools.cli, cheshire, ...)
 * Library support via popular tools like the `clojure` CLI
 
-Also see the [slides](https://speakerdeck.com/borkdude/babashka-and-the-small-clojure-interpreter-at-clojured-2020) of the Babashka talk at ClojureD 2020 (video coming soon).
-
 ### Non-goals
 
 * Performance<sup>1<sup>
@@ -55,15 +53,15 @@ startup time penalty. Read more about the differences with Clojure
 
 ### Talk
 
-To get an overview of babashka, you can watch this talk:
+To get an overview of babashka, you can watch this talk ([slides](https://speakerdeck.com/borkdude/babashka-and-the-small-clojure-interpreter-at-clojured-2020)):
 
 [![Babashka at ClojureD 2020](https://img.youtube.com/vi/Nw8aN-nrdEk/0.jpg)](https://www.youtube.com/watch?v=Nw8aN-nrdEk)
-
 
 ## Quickstart
 
 ``` shellsession
-$ bash <(curl -s https://raw.githubusercontent.com/borkdude/babashka/master/install)
+$ curl -s https://raw.githubusercontent.com/borkdude/babashka/master/install -o install-babashka
+$ chmod +x install-babashka && ./install-babashka
 $ ls | bb --time -i '(filter #(-> % io/file .isDirectory) *input*)'
 ("doc" "resources" "sci" "script" "src" "target" "test")
 bb took 4ms.
@@ -172,7 +170,7 @@ Check out the image on [Docker hub](https://hub.docker.com/r/borkdude/babashka/)
 Usage: bb [ -i | -I ] [ -o | -O ] [ --stream ] [--verbose]
           [ ( --classpath | -cp ) <cp> ] [ --uberscript <file> ]
           [ ( --main | -m ) <main-namespace> | -e <expression> | -f <file> |
-            --repl | --socket-repl [<host>:]<port> ]
+            --repl | --socket-repl [<host>:]<port> | --nrepl-server [<host>:]<port> ]
           [ arg* ]
 
 Options:
@@ -194,6 +192,7 @@ Options:
   -m, --main <ns>     Call the -main function from namespace with args.
   --repl              Start REPL. Use rlwrap for history.
   --socket-repl       Start socket REPL. Specify port (e.g. 1666) or host and port separated by colon (e.g. 127.0.0.1:1666).
+  --nrepl-server      Start nREPL server. Specify port (e.g. 1667) or host and port separated by colon (e.g. 127.0.0.1:1667).
   --time              Print execution time before exiting.
   --                  Stop parsing args and pass everything after -- to *command-line-args*
 
@@ -226,6 +225,7 @@ enumerated explicitly.
 - [`clojure.data.csv`](https://github.com/clojure/data.csv) aliased as `csv`
 - [`cheshire.core`](https://github.com/dakrone/cheshire) aliased as `json`
 - [`cognitect.transit`](https://github.com/cognitect/transit-clj) aliased as `transit`
+- [`bencode.core`](https://github.com/nrepl/bencode) aliased as `bencode`: `read-bencode`, `write-bencode`.
 
 A selection of java classes are available, see `babashka/impl/classes.clj`.
 
@@ -415,6 +415,11 @@ $ cat script.clj
 ("hello" "1" "2" "3")
 ```
 
+## [Running a REPL](doc/repl.md)
+
+Babashka offers a REPL, a socket REPL and an nREPL server. Look
+[here](doc/repl.md) for more information.
+
 ## Preloads
 
 The environment variable `BABASHKA_PRELOADS` allows to define code that will be
@@ -456,6 +461,28 @@ $ bb --classpath src --main my.namespace
 Hello from my namespace!
 ```
 
+So if you have a larger script with a classic Clojure project layout like
+
+```shellsession
+$ tree -L 3
+├── deps.edn
+├── README
+├── src
+│   └── project_namespace
+│       ├── main.clj
+│       └── utilities.clj
+└── test
+    └── project_namespace
+        ├── test_main.clj
+        └── test_utilities.clj
+```
+Then you can tell Babashka to include both the `src` and `test`
+folders in the classpath and start a socket REPL by running:
+
+```shellsession
+$ bb --classpath src:test --socket-repl 1666
+```
+
 Note that you can use the `clojure` tool to produce classpaths and download dependencies:
 
 ``` shellsession
@@ -480,6 +507,9 @@ $ export BABASHKA_PRELOADS="(require '[my-gist-script])"
 $ bb "(my-gist-script/-main)"
 Hello from gist script!
 ```
+
+When invoking `bb` with a main function, the expression `(System/getProperty
+"babashka.main")` will return the name of the main function.
 
 Also see the
 [babashka.classpath](https://github.com/borkdude/babashka/#babashkaclasspath)
@@ -512,6 +542,46 @@ user=> (mgs/-main)
 Hello from gist script!
 nil
 ```
+
+You can also use for example `deps.clj` to produce the classpath for a
+`babashka` REPL:
+
+```shellsession
+$ cat script/start-repl.sh
+#!/bin/sh -e
+git_root=$(git rev-parse --show-toplevel)
+export BABASHKA_CLASSPATH=$("$git_root"/script/deps.clj -Spath)
+bb --socket-repl 1666
+$ ./script/start-repl.sh
+Babashka socket REPL started at localhost:1666
+```
+
+Now, given that your `deps.edn` and source tree looks something like
+
+```shellsession
+$ cat deps.edn
+{:paths ["src" "test"]
+ :deps  {}}
+$ tree -L 3
+├── deps.edn
+├── README
+├── script
+│   ├── deps.clj
+│   └── start-repl.sh
+├── src
+│   └── project_namespace
+│       ├── main.clj
+│       └── utilities.clj
+└── test
+    └── project_namespace
+        ├── test_main.clj
+        └── test_utilities.clj
+
+```
+
+you should now be able to `(require '[multi-machine-rsync.utilities :as util])`
+in your REPL and the source code in `/src/multi_machine_rsync/utilities.clj`
+will be evaluated and made available through the symbol `util`.
 
 ## Uberscript
 
@@ -591,56 +661,6 @@ bb -cp "src:test:resources" \
          (System/exit (+ fail error)))"
 ```
 
-## REPL
-
-Babashka supports both a REPL and socket REPL. To start the REPL, type:
-
-``` shell
-$ bb --repl
-```
-
-To get history with up and down arrows, use `rlwrap`:
-
-``` shell
-$ rlwrap bb --repl
-```
-
-To start the socket REPL you can do this:
-
-``` shellsession
-$ bb --socket-repl 1666
-Babashka socket REPL started at localhost:1666
-```
-
-Now you can connect with your favorite socket REPL client:
-
-``` shellsession
-$ rlwrap nc 127.0.0.1 1666
-Babashka v0.0.14 REPL.
-Use :repl/quit or :repl/exit to quit the REPL.
-Clojure rocks, Bash reaches.
-
-bb=> (+ 1 2 3)
-6
-bb=> :repl/quit
-$
-```
-
-Editor plugins offering auto-completion support when connected to a babashka socket REPL:
-
-- Emacs: [inf-clojure](https://github.com/clojure-emacs/inf-clojure):
-
-  To connect:
-
-  `M-x inf-clojure-connect localhost 1666`
-
-  Before evaluating from a Clojure buffer:
-
-  `M-x inf-clojure-minor-mode`
-
-- Atom: [chlorine](https://github.com/mauricioszabo/atom-chlorine)
-- Vim: [vim-iced](https://github.com/liquidz/vim-iced)
-
 ## Spawning and killing a process
 
 Use the `java.lang.ProcessBuilder` class.
@@ -708,6 +728,39 @@ This can be useful for talking to Docker:
     :RepoTags) ;;=> ["borkdude/babashka:latest"]
 ```
 
+## Shutdown hook
+
+Adding a shutdown hook allows you to execute some code before the script exits.
+
+``` clojure
+$ bb -e '(-> (Runtime/getRuntime) (.addShutdownHook (Thread. #(println "bye"))))'
+bye
+```
+
+This also works when the script is interrupted with ctrl-c.
+
+## Bencode
+
+Babashka comes with the [nrepl/bencode](https://github.com/nrepl/bencode)
+library which allows you to read and write bencode messages to a socket. A
+simple example which evaluates a Clojure expression on an nREPL server started
+with `lein repl`:
+
+``` clojure
+(ns nrepl-client
+  (:require [bencode.core :as b]))
+
+(defn nrepl-eval [port expr]
+  (let [s (java.net.Socket. "localhost" port)
+        out (.getOutputStream s)
+        in (java.io.PushbackInputStream. (.getInputStream s))
+        _ (b/write-bencode out {"op" "eval" "code" expr})
+        bytes (get (b/read-bencode in) "value")]
+    (String. bytes)))
+
+(nrepl-eval 52054 "(+ 1 2 3)") ;;=> "6"
+```
+
 ## Differences with Clojure
 
 Babashka is implemented using the [Small Clojure
@@ -728,7 +781,7 @@ Differences with Clojure:
   than in Clojure on the JVM. In general interpretation yields slower programs
   than compiled programs.
 
-- No support for unboxed types.
+- No `defprotocol`, `defrecord` and unboxed math.
 
 ## External resources
 
@@ -767,13 +820,13 @@ Ran 1 tests containing 0 assertions.
 Requires `bb` >= v0.0.71. Latest coordinates checked with with bb:
 
 ``` clojure
-{:git/url "https://github.com/weavejester" :sha "a4e5fb5383f5c0d83cb2d005181a35b76d8a136d"}
+{:git/url "https://github.com/weavejester/medley" :sha "a4e5fb5383f5c0d83cb2d005181a35b76d8a136d"}
 ```
 
 Example:
 
 ``` shell
-$ export BABASHKA_CLASSPATH=$(clojure -Spath -Sdeps '{:deps {medley {:git/url "https://github.com/weavejester" :sha "a4e5fb5383f5c0d83cb2d005181a35b76d8a136d"}}}')
+$ export BABASHKA_CLASSPATH=$(clojure -Spath -Sdeps '{:deps {medley {:git/url "https://github.com/weavejester/medley" :sha "a4e5fb5383f5c0d83cb2d005181a35b76d8a136d"}}}')
 
 $ bb -e "(require '[medley.core :as m]) (m/index-by :id [{:id 1} {:id 2}])"
 {1 {:id 1}, 2 {:id 2}}
@@ -872,6 +925,10 @@ user=> (hello "Alice")
 "Hello Alice"
 ```
 
+#### [nubank/docopt](https://github.com/nubank/docopt.clj#babashka)
+
+Docopt implementation in Clojure, compatible with babashka.
+
 #### [babashka lambda layer](https://github.com/dainiusjocas/babashka-lambda-layer)
 
 Babashka Lambda runtime packaged as a Lambda layer.
@@ -881,14 +938,25 @@ Babashka Lambda runtime packaged as a Lambda layer.
 Github Action to create a git tag + release when pushed to master. Written in
 babashka.
 
+#### [justone/bb-scripts](https://github.com/justone/bb-scripts)
+
+A collection of scripts developed by [@justone](https://github.com/justone).
+
+#### [nativity](https://github.com/MnRA/nativity)
+
+Turn babashka scripts into binaries using GraalVM `native-image`.
+
 ## Package babashka script as a AWS Lambda
 
 AWS Lambda runtime doesn't support signals, therefore babashka has to disable
 handling of the SIGPIPE. This can be done by setting
 `BABASHKA_DISABLE_PIPE_SIGNAL_HANDLER` to `true`.
 
-### Blogs
+## Articles, podcasts and videos
 
+- [Implementing an nREPL server for babashka](https://youtu.be/0YmZYnwyHHc): impromptu presentation by Michiel Borkent at the online [Dutch Clojure Meetup](http://meetup.com/The-Dutch-Clojure-Meetup)
+- [ClojureScript podcast](https://soundcloud.com/user-959992602/s3-e5-babashka-with-michiel-borkent) with Jacek Schae interviewing Michiel Borkent
+- [Babashka talk at ClojureD](https://www.youtube.com/watch?v=Nw8aN-nrdEk) ([slides](https://speakerdeck.com/borkdude/babashka-and-the-small-clojure-interpreter-at-clojured-2020)) by Michiel Borkent
 - [Babashka: a quick example](https://juxt.pro/blog/posts/babashka.html) by Malcolm Sparks
 - [Clojure Start Time in 2019](https://stuartsierra.com/2019/12/21/clojure-start-time-in-2019) by Stuart Sierra
 - [Advent of Random
@@ -1063,6 +1131,8 @@ bb '(let [{:keys [dependencies source-paths resource-paths]} (apply hash-map (dr
 jet --pretty > deps.edn
 ```
 
+A script with the same goal can be found [here](https://gist.github.com/swlkr/3f346c66410e5c60c59530c4413a248e#gistcomment-3232605).
+
 ### Print current time in California
 
 See [examples/pst.clj](https://github.com/borkdude/babashka/blob/master/examples/pst.clj)
@@ -1093,7 +1163,7 @@ clojure.core/ffirst
 
 (defn sha1
   [s]
-  (let [hashed (.digest (.getInstance java.security.MessageDigest "SHA-1")
+  (let [hashed (.digest (java.security.MessageDigest/getInstance "SHA-1")
                         (.getBytes s))
         sw (java.io.StringWriter.)]
     (binding [*out* sw]
@@ -1159,9 +1229,21 @@ example. If you get prompted with a login, use `admin`/`admin`.
 
 <img src="assets/notes-example.png" width="400px">
 
+### which
+
+The `which` command re-implemented in Clojure. See
+[examples/which.clj](https://github.com/borkdude/babashka/blob/master/examples/which.clj).
+Prints the canonical file name.
+
+``` shell
+$ examples/which.clj rg
+/usr/local/Cellar/ripgrep/11.0.1/bin/rg
+```
+
 ## Thanks
 
 - [adgoji](https://www.adgoji.com/) for financial support
+- [CircleCI](https://circleci.com/) for CI and additional support
 - [Nikita Prokopov](https://github.com/tonsky) for the logo
 - [contributors](https://github.com/borkdude/babashka/graphs/contributors) and
   other users posting issues with bug reports and ideas

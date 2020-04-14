@@ -23,13 +23,16 @@
           java.io.IOException
           java.io.OutputStream
           java.io.FileReader
+          java.io.PushbackInputStream
           java.io.Reader
+          java.io.SequenceInputStream
           java.io.StringReader
           java.io.StringWriter
           java.io.Writer
           java.lang.ArithmeticException
           java.lang.AssertionError
           java.lang.Boolean
+          java.lang.Byte
           java.lang.Class
           java.lang.Double
           java.lang.Exception
@@ -37,6 +40,7 @@
           java.lang.Long
           java.lang.NumberFormatException
           java.lang.Math
+          java.lang.Runtime
           java.lang.RuntimeException
           java.util.concurrent.LinkedBlockingQueue
           java.lang.Object
@@ -204,6 +208,8 @@
                    java.security.MessageDigest
                    (instance? java.io.InputStream v)
                    java.io.InputStream
+                   (instance? java.io.OutputStream v)
+                   java.io.OutputStream
                    (instance? java.nio.file.FileSystem v)
                    java.nio.file.FileSystem)))))
 
