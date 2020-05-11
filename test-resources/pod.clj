@@ -47,8 +47,6 @@
                 op (read-string op)
                 op (keyword op)]
             (case op
-              ;; TODO:
-              ;; group by namespace
               :describe (do (write {"format" (if (= format :json)
                                                "json"
                                                "edn")
@@ -60,7 +58,8 @@
                                               {"name" "assoc"}
                                               {"name" "error"}
                                               {"name" "print"}
-                                              {"name" "print-err"}]}]})
+                                              {"name" "print-err"}]}]
+                                    "ops" {"shutdown" {}}})
                             (recur))
               :invoke (let [var (-> (get message "var")
                                     read-string
@@ -111,7 +110,8 @@
                               (write
                                {"status" ["done"]
                                 "id" id})))
-                        (recur)))))))))
+                        (recur))
+              :shutdown (System/exit 0))))))))
 
 (let [cli-args (set *command-line-args*)]
   (if (contains? cli-args "--run-as-pod")
